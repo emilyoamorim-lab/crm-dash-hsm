@@ -91,19 +91,27 @@ if df is not None:
         st.markdown("---")
         col_an1, col_an2 = st.columns([1.8, 1.2])
 
+        # Localizar recordistas antecipadamente para usar em ambos os lados
+        recordista_ab = df_filtrado.loc[df_filtrado[COL_ABERTURA].idxmax()]
+        recordista_cl = df_filtrado.loc[df_filtrado[COL_CLIQUE].idxmax()]
+
         with col_an1:
             st.subheader("🕵️ Análise do Especialista")
             if len(produtos_sel) >= 1:
-                melhor_envio_ab = df_filtrado.loc[df_filtrado[COL_ABERTURA].idxmax()]
-                data_str = melhor_envio_ab[COL_DATA].strftime('%d/%m/%Y')
+                # Lógica de Insight Baseada em Volume
+                media_volume = df_filtrado[COL_ENVIADO].mean()
+                tipo_sucesso = "Escala/Geral" if recordista_ab[COL_ENVIADO] > media_volume else "Nicho/Segmentado"
                 
                 st.info(f"""
-                **Diagnóstico de Performance: {melhor_envio_ab[COL_PRODUTO]}**
+                **Diagnóstico de Performance: {recordista_ab[COL_PRODUTO]}**
                 
-                O disparo realizado em **{data_str}** obteve o maior engajamento inicial do período. 
-                Com o assunto **"{melhor_envio_ab[COL_ASSUNTO]}"**, conseguimos abrir as portas para **{melhor_envio_ab[COL_ABERTURA]:.1f}%** da base.
+                O recorde de abertura foi de **{recordista_ab[COL_ABERTURA]:.1f}%** em **{recordista_ab[COL_DATA].strftime('%d/%m/%Y')}**. 
+                Este disparo impactou **{recordista_ab[COL_ENVIADO]:,.0f} pessoas**, o que caracteriza um sucesso de estratégia de **{tipo_sucesso}**.
                 
-                **Volume Acumulado:** Nos filtros aplicados, o CRM impactou um total acumulado de **{total_base:,.0f} contatos**.
+                **Análise de Conversão:** O melhor clique do período atingiu **{recordista_cl[COL_CLIQUE]:.1f}%** em uma base de **{recordista_cl[COL_ENVIADO]:,.0f} pessoas**. 
+                {"Isso mostra que ofertas focadas em grupos menores estão convertendo melhor." if recordista_cl[COL_ENVIADO] < media_volume else "Este volume prova que a oferta tem alto poder de tração em bases maiores."}
+                
+                **Resumo Acumulado:** Nos filtros aplicados, o CRM gerou um impacto total de **{total_base:,.0f} contatos única/vezes**.
                 """)
             else:
                 st.write("Selecione um produto para análise detalhada.")
@@ -111,14 +119,11 @@ if df is not None:
         with col_an2:
             st.subheader("🏆 Recordistas do Filtro")
             
-            # Localizar recordistas
-            recordista_ab = df_filtrado.loc[df_filtrado[COL_ABERTURA].idxmax()]
-            recordista_cl = df_filtrado.loc[df_filtrado[COL_CLIQUE].idxmax()]
-
             # Card de Melhor Abertura
             st.success(f"""
             🔥 **Melhor Taxa de Abertura: {recordista_ab[COL_ABERTURA]:.1f}%**  
             **Data:** {recordista_ab[COL_DATA].strftime('%d/%m/%Y')}  
+            **Base Impactada:** {recordista_ab[COL_ENVIADO]:,.0f} pessoas  
             **Assunto:** *{recordista_ab[COL_ASSUNTO]}*
             """)
 
@@ -126,6 +131,7 @@ if df is not None:
             st.info(f"""
             🚀 **Melhor Taxa de Clique: {recordista_cl[COL_CLIQUE]:.1f}%**  
             **Data:** {recordista_cl[COL_DATA].strftime('%d/%m/%Y')}  
+            **Base Impactada:** {recordista_cl[COL_ENVIADO]:,.0f} pessoas  
             **Assunto:** *{recordista_cl[COL_ASSUNTO]}*
             """)
                 
@@ -134,17 +140,10 @@ if df is not None:
             
             c_m1, c_m2 = st.columns(2)
             with c_m1:
-                if media_ab >= META_ABERTURA:
-                    st.write(f"✅ **Abertura:** {media_ab:.1f}%")
-                else:
-                    st.write(f"⚠️ **Abertura:** {media_ab:.1f}%")
+                st.write(f"{'✅' if media_ab >= META_ABERTURA else '⚠️'} **Abertura:** {media_ab:.1f}%")
                 st.caption(f"Meta: {META_ABERTURA}%")
-
             with c_m2:
-                if media_cl >= META_CTR:
-                    st.write(f"✅ **Clique:** {media_cl:.1f}%")
-                else:
-                    st.write(f"⚠️ **Clique:** {media_cl:.1f}%")
+                st.write(f"{'✅' if media_cl >= META_CTR else '⚠️'} **Clique:** {media_cl:.1f}%")
                 st.caption(f"Meta: {META_CTR}%")
 
         with st.expander("📋 Ver Dados Completos"):
