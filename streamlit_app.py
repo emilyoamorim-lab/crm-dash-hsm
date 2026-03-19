@@ -89,58 +89,63 @@ if df is not None:
 
         # --- ANÁLISE E RESUMO ---
         st.markdown("---")
-        col_an1, col_an2 = st.columns([2, 1])
+        col_an1, col_an2 = st.columns([1.8, 1.2])
 
         with col_an1:
             st.subheader("🕵️ Análise do Especialista")
             if len(produtos_sel) >= 1:
-                melhor_envio = df_filtrado.loc[df_filtrado[COL_ABERTURA].idxmax()]
-                data_str = melhor_envio[COL_DATA].strftime('%d/%m/%Y')
+                melhor_envio_ab = df_filtrado.loc[df_filtrado[COL_ABERTURA].idxmax()]
+                data_str = melhor_envio_ab[COL_DATA].strftime('%d/%m/%Y')
                 
                 st.info(f"""
-                **Diagnóstico de Performance: {melhor_envio[COL_PRODUTO]}**
+                **Diagnóstico de Performance: {melhor_envio_ab[COL_PRODUTO]}**
                 
-                O disparo realizado em **{data_str}** foi o ponto fora da curva do período. 
-                Com o assunto **"{melhor_envio[COL_ASSUNTO]}"**, conseguimos engajar **{melhor_envio[COL_ABERTURA]:.1f}%** da base de **{melhor_envio[COL_ENVIADO]:,.0f}** pessoas.
+                O disparo realizado em **{data_str}** obteve o maior engajamento inicial do período. 
+                Com o assunto **"{melhor_envio_ab[COL_ASSUNTO]}"**, conseguimos abrir as portas para **{melhor_envio_ab[COL_ABERTURA]:.1f}%** da base.
                 
-                **Insight de Conversão:** A taxa de clique (CTR) deste envio específico foi de **{melhor_envio[COL_CLIQUE]:.1f}%**. 
-                Isso indica que a "promessa" do assunto foi bem entregue no corpo do e-mail.
-                
-                **Volume Acumulado:** Somando todos os esforços dos filtros selecionados, o CRM impactou **{total_base:,.0f} contatos única/vezes**.
+                **Volume Acumulado:** Nos filtros aplicados, o CRM impactou um total acumulado de **{total_base:,.0f} contatos**.
                 """)
             else:
                 st.write("Selecione um produto para análise detalhada.")
 
         with col_an2:
-            st.subheader("🌟 Resumo do Recordista")
-            if not df_filtrado.empty:
-                melhor_geral = df_filtrado.loc[df_filtrado[COL_ABERTURA].idxmax()]
+            st.subheader("🏆 Recordistas do Filtro")
+            
+            # Localizar recordistas
+            recordista_ab = df_filtrado.loc[df_filtrado[COL_ABERTURA].idxmax()]
+            recordista_cl = df_filtrado.loc[df_filtrado[COL_CLIQUE].idxmax()]
+
+            # Card de Melhor Abertura
+            st.success(f"""
+            🔥 **Melhor Taxa de Abertura: {recordista_ab[COL_ABERTURA]:.1f}%**  
+            **Data:** {recordista_ab[COL_DATA].strftime('%d/%m/%Y')}  
+            **Assunto:** *{recordista_ab[COL_ASSUNTO]}*
+            """)
+
+            # Card de Melhor Clique
+            st.info(f"""
+            🚀 **Melhor Taxa de Clique: {recordista_cl[COL_CLIQUE]:.1f}%**  
+            **Data:** {recordista_cl[COL_DATA].strftime('%d/%m/%Y')}  
+            **Assunto:** *{recordista_cl[COL_ASSUNTO]}*
+            """)
                 
-                st.success(f"""
-                **Melhor Taxa de Abertura:**  
-                {melhor_geral[COL_ABERTURA]:.1f}%
-                
-                **Data do Envio:**  
-                {melhor_geral[COL_DATA].strftime('%d/%m/%Y')}
-                
-                **Assunto Campeão:**  
-                *{melhor_geral[COL_ASSUNTO]}*
-                """)
-                
-                st.markdown("---")
-                st.write("🌍 **Comparativo com Educação Corporativa**")
-                
-                # Comparação visual de Abertura
+            st.markdown("---")
+            st.write("🌍 **Métricas de Mercado (Ed. Corporativa)**")
+            
+            c_m1, c_m2 = st.columns(2)
+            with c_m1:
                 if media_ab >= META_ABERTURA:
-                    st.write(f"✅ **Abertura:** {media_ab:.1f}% (Acima dos {META_ABERTURA}% do setor)")
+                    st.write(f"✅ **Abertura:** {media_ab:.1f}%")
                 else:
-                    st.write(f"⚠️ **Abertura:** {media_ab:.1f}% (Abaixo dos {META_ABERTURA}% do setor)")
-                
-                # Comparação visual de Clique
+                    st.write(f"⚠️ **Abertura:** {media_ab:.1f}%")
+                st.caption(f"Meta: {META_ABERTURA}%")
+
+            with c_m2:
                 if media_cl >= META_CTR:
-                    st.write(f"✅ **Clique:** {media_cl:.1f}% (Acima dos {META_CTR}% do setor)")
+                    st.write(f"✅ **Clique:** {media_cl:.1f}%")
                 else:
-                    st.write(f"⚠️ **Clique:** {media_cl:.1f}% (Abaixo dos {META_CTR}% do setor)")
+                    st.write(f"⚠️ **Clique:** {media_cl:.1f}%")
+                st.caption(f"Meta: {META_CTR}%")
 
         with st.expander("📋 Ver Dados Completos"):
             st.dataframe(df_filtrado[[COL_DATA, COL_BU, COL_PRODUTO, COL_ASSUNTO, COL_ENVIADO, COL_ABERTURA, COL_CLIQUE]].sort_values(by=COL_DATA, ascending=False))
