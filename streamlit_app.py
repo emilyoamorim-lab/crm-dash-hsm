@@ -66,7 +66,7 @@ if df is not None:
     ].copy()
 
     if not df_filtrado.empty:
-        # --- 1. KPIs NO TOPO ---
+        # --- 1. KPIs NO TOPO (Padronizados com Siglas) ---
         m1, m2, m3, m4 = st.columns(4)
         total_base = df_filtrado[COL_ENVIADO].sum()
         media_ab = df_filtrado[COL_ABERTURA].mean()
@@ -74,11 +74,11 @@ if df is not None:
         cto_medio = (media_cl / media_ab * 100) if media_ab > 0 else 0
         
         m1.metric("Base Total de Envio", f"{total_base:,.0f}".replace(",", "."))
-        m2.metric("Abertura Média", f"{media_ab:.1f}%", delta=f"{media_ab - META_ABERTURA:.1f}% vs Mercado")
+        m2.metric("Abertura Média (OR)", f"{media_ab:.1f}%", delta=f"{media_ab - META_ABERTURA:.1f}% vs Mercado")
         m3.metric("Clique Médio (CTR)", f"{media_cl:.1f}%", delta=f"{media_cl - META_CTR:.1f}% vs Mercado")
         m4.metric("Eficiência (CTO)", f"{cto_medio:.1f}%", delta=f"{cto_medio - META_CTO:.1f}% vs Mercado")
 
-        # --- 2. ANÁLISE E RECORDISTAS (Moveram para cima) ---
+        # --- 2. ANÁLISE E RECORDISTAS ---
         st.markdown("---")
         col_an1, col_an2 = st.columns([1.8, 1.2])
 
@@ -95,12 +95,12 @@ if df is not None:
                 st.info(f"""
                 **Diagnóstico de Performance: {recordista_ab[COL_PRODUTO]}**
                 
-                O recorde de abertura foi de **{recordista_ab[COL_ABERTURA]:.1f}%** com uma **Base de Envio de {recordista_ab[COL_ENVIADO]:,.0f} pessoas**. 
+                O recorde de abertura (OR) foi de **{recordista_ab[COL_ABERTURA]:.1f}%** com uma **Base de Envio de {recordista_ab[COL_ENVIADO]:,.0f} pessoas**. 
                 Este resultado indica uma estratégia de sucesso em **{tipo_sucesso}**.
                 
                 **Eficiência de Conteúdo (CTO):** Sua taxa interna de conversão está em **{cto_medio:.1f}%**. No setor de Educação Corporativa (meta {META_CTO}%), este desempenho é de **{status_cto}**.
                 
-                **Insight de Clique:** O melhor clique atingiu **{recordista_cl[COL_CLIQUE]:.1f}%** (Base de Envio: {recordista_cl[COL_ENVIADO]:,.0f}). 
+                **Insight de Clique:** O melhor clique (CTR) atingiu **{recordista_cl[COL_CLIQUE]:.1f}%** (Base de Envio: {recordista_cl[COL_ENVIADO]:,.0f}). 
                 {"Segmentações cirúrgicas estão gerando maior conversão de cliques." if recordista_cl[COL_ENVIADO] < media_volume else "A oferta demonstra alto poder de tração em bases de larga escala."}
                 """)
             else:
@@ -110,14 +110,14 @@ if df is not None:
             st.subheader("🏆 Recordistas do Filtro")
             
             st.success(f"""
-            🔥 **Melhor Abertura: {recordista_ab[COL_ABERTURA]:.1f}%**  
+            🔥 **Melhor Abertura (OR): {recordista_ab[COL_ABERTURA]:.1f}%**  
             **Data:** {recordista_ab[COL_DATA].strftime('%d/%m/%Y')}  
             **Base de Envio:** {recordista_ab[COL_ENVIADO]:,.0f} pessoas  
             **Assunto:** *{recordista_ab[COL_ASSUNTO]}*
             """)
 
             st.info(f"""
-            🚀 **Melhor Clique: {recordista_cl[COL_CLIQUE]:.1f}%**  
+            🚀 **Melhor Clique (CTR): {recordista_cl[COL_CLIQUE]:.1f}%**  
             **Data:** {recordista_cl[COL_DATA].strftime('%d/%m/%Y')}  
             **Base de Envio:** {recordista_cl[COL_ENVIADO]:,.0f} pessoas  
             **Assunto:** *{recordista_cl[COL_ASSUNTO]}*
@@ -125,14 +125,22 @@ if df is not None:
                 
             st.write("🌍 **Métricas de Mercado (Ed. Corporativa)**")
             c_m1, c_m2, c_m3 = st.columns(3)
-            with c_m1: st.write(f"{'✅' if media_ab >= META_ABERTURA else '⚠️'} **Abr:** {media_ab:.1f}%")
-            with c_m2: st.write(f"{'✅' if media_cl >= META_CTR else '⚠️'} **Cli:** {media_cl:.1f}%")
+            with c_m1: st.write(f"{'✅' if media_ab >= META_ABERTURA else '⚠️'} **OR:** {media_ab:.1f}%")
+            with c_m2: st.write(f"{'✅' if media_cl >= META_CTR else '⚠️'} **CTR:** {media_cl:.1f}%")
             with c_m3: st.write(f"{'✅' if cto_medio >= META_CTO else '⚠️'} **CTO:** {cto_medio:.1f}%")
 
-        # --- 3. GRÁFICOS EMPILHADOS (Um embaixo do outro) ---
+        # --- 3. GRÁFICOS EMPILHADOS ---
         st.markdown("---")
-        st.subheader("📈 Tendência de Abertura")
-        fig_abert = px.line(df_filtrado, x=COL_DATA, y=COL_ABERTURA, color=COL_PRODUTO, markers=True)
+        
+        # Gráfico Abertura (OR)
+        fig_abert = px.line(df_filtrado, 
+                           x=COL_DATA, 
+                           y=COL_ABERTURA, 
+                           color=COL_PRODUTO, 
+                           markers=True,
+                           labels={COL_DATA: "Data", COL_ABERTURA: "Taxa de Abertura (OR)"},
+                           title="📈 Tendência: Taxa de Abertura (OR)")
+        
         fig_abert.update_traces(
             hovertemplate="<b>Produto:</b> %{fullData.name}<br><b>Data:</b> %{x}<br><b>Base de Envio:</b> %{customdata[1]:,.0f}<br><b>Abertura:</b> %{y:.1f}%<extra></extra>",
             customdata=df_filtrado[[COL_ASSUNTO, COL_ENVIADO]]
@@ -140,8 +148,16 @@ if df is not None:
         st.plotly_chart(fig_abert, use_container_width=True)
 
         st.markdown("---")
-        st.subheader("📈 Tendência de Clique (CTR)")
-        fig_clique = px.line(df_filtrado, x=COL_DATA, y=COL_CLIQUE, color=COL_PRODUTO, markers=True)
+        
+        # Gráfico Clique (CTR) - Ajustado Nomes
+        fig_clique = px.line(df_filtrado, 
+                            x=COL_DATA, 
+                            y=COL_CLIQUE, 
+                            color=COL_PRODUTO, 
+                            markers=True,
+                            labels={COL_DATA: "Data", COL_CLIQUE: "Taxa de Clique"},
+                            title="📈 Tendência: Taxa de Clique (CTR)")
+        
         fig_clique.update_traces(
             hovertemplate="<b>Produto:</b> %{fullData.name}<br><b>Data:</b> %{x}<br><b>Base de Envio:</b> %{customdata[1]:,.0f}<br><b>Clique:</b> %{y:.1f}%<extra></extra>",
             customdata=df_filtrado[[COL_ASSUNTO, COL_ENVIADO]]
