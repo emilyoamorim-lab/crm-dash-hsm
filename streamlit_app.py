@@ -2,82 +2,75 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# Configuração visual
-st.set_page_config(page_title="CRM Dash - Ecossistema HSM/Singularity", layout="wide")
+st.set_page_config(page_title="CRM Dash - HSM/Singularity", layout="wide")
 
 st.title("📊 Dashboard de Performance CRM")
 st.markdown("---")
 
-# 1. SIDEBAR - Configurações
 st.sidebar.header("⚙️ Configurações")
 arquivo = st.sidebar.file_uploader("Suba sua base semanal", type=["csv", "xlsx"])
 
 if arquivo:
     try:
-        # Carregamento dos dados
         df = pd.read_excel(arquivo) if arquivo.name.endswith('.xlsx') else pd.read_csv(arquivo)
         
-        # Mapeamento de Colunas
-        st.sidebar.subheader("Mapeamento de Colunas")
+        # Mapeamento Automático
         col_bu = st.sidebar.selectbox("Produto/BU:", df.columns, index=0)
         col_data_bruta = st.sidebar.selectbox("Coluna de Data/Hora:", df.columns, index=3)
         col_abertura = st.sidebar.selectbox("Taxa de Abertura:", df.columns, index=4)
         col_clique = st.sidebar.selectbox("Taxa de Clique:", df.columns, index=5)
+        # Tenta achar a coluna de Assunto para o gráfico
+        col_assunto = "Assunto" if "Assunto" in df.columns else df.columns[1]
 
-        # --- TRATAMENTO DE DATAS (O SEGREDO DO FILTRO) ---
-        # Converte a coluna para data e cria uma coluna de "Mês/Ano" amigável
+        # Tratamento de Datas
         df[col_data_bruta] = pd.to_datetime(df[col_data_bruta], errors='coerce')
-        df['Mês_Ref'] = df[col_data_bruta].dt.strftime('%m - %B %Y') 
-        # Ordenação para os meses aparecerem na ordem correta (Jan, Fev, Mar)
+        df['Mês_Ref'] = df[col_data_bruta].dt.strftime('%m - %B %Y')
         df = df.sort_values(by=col_data_bruta)
-        meses_disponiveis = df['Mês_Ref'].unique().tolist()
 
-        # --- FILTROS DINÂMICOS ---
+        # Filtros
         st.sidebar.markdown("---")
-        st.sidebar.subheader("🎯 Filtros de Visualização")
-        
-        # Agora o filtro é por MÊS e não por hora/minuto
-        meses_selecionados = st.sidebar.multiselect("Selecionar Mês:", options=meses_disponiveis, default=meses_disponiveis)
-        
-        todas_unidades = df[col_bu].unique().tolist()
-        unidades_selecionadas = st.sidebar.multiselect("Selecionar Unidade:", options=todas_unidades, default=todas_unidades)
+        meses_selecionados = st.sidebar.multiselect("Selecionar Mês:", options=df['Mês_Ref'].unique(), default=df['Mês_Ref'].unique())
+        unidades_selecionadas = st.sidebar.multiselect("Selecionar Unidade:", options=df[col_bu].unique(), default=df[col_bu].unique())
 
-        # Aplicando filtros
-        df_filtrado = df[
-            (df[col_bu].isin(unidades_selecionadas)) & 
-            (df['Mês_Ref'].isin(meses_selecionados))
-        ].copy()
+        df_filtrado = df[(df[col_bu].isin(unidades_selecionadas)) & (df['Mês_Ref'].isin(meses_selecionados))].copy()
 
-        # --- CORREÇÃO MATEMÁTICA ---
+        # Ajuste de %
         def ajustar_porcentagem(valor):
             if pd.isna(valor): return 0
-            if valor <= 1.0: return valor * 100
-            return valor
+            return valor * 100 if valor <= 1.0 else valor
 
         df_filtrado[col_abertura] = df_filtrado[col_abertura].apply(ajustar_porcentagem)
         df_filtrado[col_clique] = df_filtrado[col_clique].apply(ajustar_porcentagem)
 
-        # --- EXIBIÇÃO DOS KPIs ---
-        st.subheader(f"📌 Resultados: {', '.join(meses_selecionados) if len(meses_selecionados) < 4 else 'Todo o Período'}")
-        
-        kpi1, kpi2, kpi3 = st.columns(3)
+        # KPIs
+        m1, m2, m3 = st.columns(3)
         media_ab = df_filtrado[col_abertura].mean()
-        media_cl = df_filtrado[col_clique].mean()
-        
-        # Agora o 20.25% aparecerá de forma legível
-        kpi1.metric("Abertura Média", f"{media_ab:.2f}%", delta=f"{media_ab - 22:.1f}% vs Meta")
-        kpi2.metric("Clique Médio (CTR)", f"{media_cl:.2f}%", delta=f"{media_cl - 2.5:.1f}% vs Meta")
-        kpi3.metric("Eficiência (CTO)", f"{(media_cl/media_ab)*100:.1f}%" if media_ab > 0 else "0%")
+        m1.metric("Abertura Média", f"{media_ab:.2f}%", delta=f"{media_ab - 22:.1f}% vs Meta")
+        m2.metric("Clique Médio", f"{df_filtrado[col_clique].mean():.2f}%")
+        m3.metric("Eficiência (CTO)", f"{(df_filtrado[col_clique].mean()/media_ab)*100:.1f}%" if media_ab > 0 else "0%")
 
-        # --- GRÁFICO DE EVOLUÇÃO ---
+        # --- NOVO GRÁFICO: EVOLUÇÃO POR DISPARO ---
         st.markdown("---")
-        st.subheader("Evolução Mensal da Abertura")
-        df_mensal = df_filtrado.groupby('Mês_Ref')[col_abertura].mean().reset_index()
-        fig_evol = px.line(df_mensal, x='Mês_Ref', y=col_abertura, markers=True, 
-                          text=df_mensal[col_abertura].map('{:.1f}%'.format))
+        st.subheader("📈 Evolução Detalhada por Disparo")
+        st.write("Cada ponto representa um envio individual. Passe o mouse para ver o assunto.")
+        
+        fig_evol = px.line(df_filtrado, 
+                          x=col_data_bruta, 
+                          y=col_abertura, 
+                          color=col_bu, # Diferencia cores por produto
+                          markers=True,
+                          hover_data={col_data_bruta: '|%d/%m %H:%M', col_assunto: True, col_abertura: ':.2f%'},
+                          title="Performance de Abertura ao Longo do Tempo")
+        
+        # Estilizando o gráfico
+        fig_evol.update_layout(xaxis_title="Data e Hora do Envio", yaxis_title="Taxa de Abertura (%)")
         st.plotly_chart(fig_evol, use_container_width=True)
 
+        # Tabela
+        st.subheader("📋 Detalhes dos E-mails Enviados")
+        st.dataframe(df_filtrado[[col_data_bruta, col_bu, col_assunto, col_abertura]].sort_values(by=col_data_bruta, ascending=False))
+
     except Exception as e:
-        st.error(f"Erro ao processar datas: {e}. Certifique-se de que a coluna de data está no formato correto.")
+        st.error(f"Erro: {e}")
 else:
-    st.info("👋 Suba sua planilha para começar!")
+    st.info("👋 Suba sua planilha para ver a evolução dos disparos!")
