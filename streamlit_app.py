@@ -14,12 +14,11 @@ if arquivo:
     try:
         df = pd.read_excel(arquivo) if arquivo.name.endswith('.xlsx') else pd.read_csv(arquivo)
         
-        # Mapeamento Automático
+        # Mapeamento
         col_bu = st.sidebar.selectbox("Produto/BU:", df.columns, index=0)
         col_data_bruta = st.sidebar.selectbox("Coluna de Data/Hora:", df.columns, index=3)
         col_abertura = st.sidebar.selectbox("Taxa de Abertura:", df.columns, index=4)
         col_clique = st.sidebar.selectbox("Taxa de Clique:", df.columns, index=5)
-        # Tenta achar a coluna de Assunto para o gráfico
         col_assunto = "Assunto" if "Assunto" in df.columns else df.columns[1]
 
         # Tratamento de Datas
@@ -29,48 +28,57 @@ if arquivo:
 
         # Filtros
         st.sidebar.markdown("---")
-        meses_selecionados = st.sidebar.multiselect("Selecionar Mês:", options=df['Mês_Ref'].unique(), default=df['Mês_Ref'].unique())
-        unidades_selecionadas = st.sidebar.multiselect("Selecionar Unidade:", options=df[col_bu].unique(), default=df[col_bu].unique())
+        meses_selecionados = st.sidebar.multiselect("Mês:", options=df['Mês_Ref'].unique(), default=df['Mês_Ref'].unique())
+        unidades_selecionadas = st.sidebar.multiselect("Unidade:", options=df[col_bu].unique(), default=df[col_bu].unique())
 
         df_filtrado = df[(df[col_bu].isin(unidades_selecionadas)) & (df['Mês_Ref'].isin(meses_selecionados))].copy()
 
-        # Ajuste de %
-        def ajustar_porcentagem(valor):
+        # --- AJUSTE E ARREDONDAMENTO (O segredo da limpeza) ---
+        def ajustar_e_arredondar(valor):
             if pd.isna(valor): return 0
-            return valor * 100 if valor <= 1.0 else valor
+            # Se for decimal (0.22), multiplica por 100. Se for inteiro (22), mantém.
+            num = valor * 100 if valor <= 1.0 else valor
+            return round(num, 1) # Arredonda para 1 casa decimal
 
-        df_filtrado[col_abertura] = df_filtrado[col_abertura].apply(ajustar_porcentagem)
-        df_filtrado[col_clique] = df_filtrado[col_clique].apply(ajustar_porcentagem)
+        df_filtrado[col_abertura] = df_filtrado[col_abertura].apply(ajustar_e_arredondar)
+        df_filtrado[col_clique] = df_filtrado[col_clique].apply(ajustar_e_arredondar)
 
-        # KPIs
+        # KPIs superiores
         m1, m2, m3 = st.columns(3)
         media_ab = df_filtrado[col_abertura].mean()
-        m1.metric("Abertura Média", f"{media_ab:.2f}%", delta=f"{media_ab - 22:.1f}% vs Meta")
-        m2.metric("Clique Médio", f"{df_filtrado[col_clique].mean():.2f}%")
+        m1.metric("Abertura Média", f"{media_ab:.1f}%", delta=f"{media_ab - 22:.1f}% vs Meta")
+        m2.metric("Clique Médio", f"{df_filtrado[col_clique].mean():.1f}%")
         m3.metric("Eficiência (CTO)", f"{(df_filtrado[col_clique].mean()/media_ab)*100:.1f}%" if media_ab > 0 else "0%")
 
-        # --- NOVO GRÁFICO: EVOLUÇÃO POR DISPARO ---
+        # --- GRÁFICO REFINADO ---
         st.markdown("---")
         st.subheader("📈 Evolução Detalhada por Disparo")
-        st.write("Cada ponto representa um envio individual. Passe o mouse para ver o assunto.")
         
         fig_evol = px.line(df_filtrado, 
                           x=col_data_bruta, 
                           y=col_abertura, 
-                          color=col_bu, # Diferencia cores por produto
+                          color=col_bu,
                           markers=True,
-                          hover_data={col_data_bruta: '|%d/%m %H:%M', col_assunto: True, col_abertura: ':.2f%'},
-                          title="Performance de Abertura ao Longo do Tempo")
+                          title="Performance de Abertura")
         
-        # Estilizando o gráfico
-        fig_evol.update_layout(xaxis_title="Data e Hora do Envio", yaxis_title="Taxa de Abertura (%)")
+        # Ajustando o que aparece no balão ao passar o mouse (hovertemplate)
+        fig_evol.update_traces(
+            hovertemplate="<b>Assunto:</b> %{customdata[0]}<br>" +
+                          "<b>Data:</b> %{x|%d/%m %H:%M}<br>" +
+                          "<b>Abertura:</b> %{y:.1f}%<extra></extra>",
+            customdata=df_filtrado[[col_assunto]]
+        )
+        
+        fig_evol.update_layout(xaxis_title="Data e Hora", yaxis_title="Abertura (%)")
         st.plotly_chart(fig_evol, use_container_width=True)
 
-        # Tabela
-        st.subheader("📋 Detalhes dos E-mails Enviados")
-        st.dataframe(df_filtrado[[col_data_bruta, col_bu, col_assunto, col_abertura]].sort_values(by=col_data_bruta, ascending=False))
+        # Tabela formatada
+        st.subheader("📋 Detalhes dos E-mails")
+        # Criamos uma cópia para exibição com o símbolo de % na tabela
+        df_exibicao = df_filtrado[[col_data_bruta, col_bu, col_assunto, col_abertura]].copy()
+        st.dataframe(df_exibicao.sort_values(by=col_data_bruta, ascending=False), use_container_width=True)
 
     except Exception as e:
         st.error(f"Erro: {e}")
 else:
-    st.info("👋 Suba sua planilha para ver a evolução dos disparos!")
+    st.info("👋 Suba sua planilha para ver os dados arredondados!")
