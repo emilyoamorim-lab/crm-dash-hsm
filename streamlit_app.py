@@ -19,7 +19,7 @@ COL_CLIQUE = "Taxa de Click Through Total"
 # Benchmarks Mercado Educação Corporativa
 META_ABERTURA = 22.0
 META_CTR = 2.5
-META_CTO = 12.0 # Média de mercado para Educação Corporativa
+META_CTO = 12.0
 
 st.title("📊 Dashboard de Performance CRM")
 
@@ -78,15 +78,28 @@ if df is not None:
         m3.metric("Clique Médio (CTR)", f"{media_cl:.1f}%", delta=f"{media_cl - META_CTR:.1f}% vs Mercado")
         m4.metric("Eficiência (CTO)", f"{cto_medio:.1f}%", delta=f"{cto_medio - META_CTO:.1f}% vs Mercado")
 
-        # --- GRÁFICO ---
+        # --- GRÁFICOS EM DUAS COLUNAS ---
         st.markdown("---")
-        fig_evol = px.line(df_filtrado, x=COL_DATA, y=COL_ABERTURA, color=COL_PRODUTO, markers=True, 
-                           title="Tendência: Taxa de Abertura por Disparo")
-        fig_evol.update_traces(
-            hovertemplate="<b>Produto:</b> %{fullData.name}<br><b>Data:</b> %{x}<br><b>Base:</b> %{customdata[1]:,.0f}<br><b>Abertura:</b> %{y:.1f}%<extra></extra>",
-            customdata=df_filtrado[[COL_ASSUNTO, COL_ENVIADO]]
-        )
-        st.plotly_chart(fig_evol, use_container_width=True)
+        col_gr1, col_gr2 = st.columns(2)
+
+        with col_gr1:
+            st.subheader("📈 Tendência: Abertura")
+            fig_abert = px.line(df_filtrado, x=COL_DATA, y=COL_ABERTURA, color=COL_PRODUTO, markers=True)
+            fig_abert.update_traces(
+                hovertemplate="<b>Produto:</b> %{fullData.name}<br><b>Data:</b> %{x}<br><b>Base:</b> %{customdata[1]:,.0f}<br><b>Abertura:</b> %{y:.1f}%<extra></extra>",
+                customdata=df_filtrado[[COL_ASSUNTO, COL_ENVIADO]]
+            )
+            st.plotly_chart(fig_abert, use_container_width=True)
+
+        with col_gr2:
+            st.subheader("📈 Tendência: Clique (CTR)")
+            fig_clique = px.line(df_filtrado, x=COL_DATA, y=COL_CLIQUE, color=COL_PRODUTO, markers=True)
+            # Definindo cor diferente para o gráfico de clique se quiser (opcional) ou manter a cor do produto
+            fig_clique.update_traces(
+                hovertemplate="<b>Produto:</b> %{fullData.name}<br><b>Data:</b> %{x}<br><b>Base:</b> %{customdata[1]:,.0f}<br><b>Clique:</b> %{y:.1f}%<extra></extra>",
+                customdata=df_filtrado[[COL_ASSUNTO, COL_ENVIADO]]
+            )
+            st.plotly_chart(fig_clique, use_container_width=True)
 
         # --- ANÁLISE E RESUMO ---
         st.markdown("---")
@@ -100,20 +113,18 @@ if df is not None:
             if len(produtos_sel) >= 1:
                 media_volume = df_filtrado[COL_ENVIADO].mean()
                 tipo_sucesso = "Escala/Geral" if recordista_ab[COL_ENVIADO] > media_volume else "Nicho/Segmentado"
-                
-                # Insight do CTO
                 status_cto = "Elite" if cto_medio > 40 else "Saudável"
                 
                 st.info(f"""
                 **Diagnóstico de Performance: {recordista_ab[COL_PRODUTO]}**
                 
-                O recorde de abertura foi de **{recordista_ab[COL_ABERTURA]:.1f}%** em uma base de **{recordista_ab[COL_ENVIADO]:,.0f} pessoas** ({tipo_sucesso}).
+                O recorde de abertura foi de **{recordista_ab[COL_ABERTURA]:.1f}%** (Base: **{recordista_ab[COL_ENVIADO]:,.0f}**).
                 
-                **Eficiência de Conteúdo (CTO):** Sua taxa de conversão interna está em **{cto_medio:.1f}%**. Para o setor de Educação Corporativa (meta 12%), sua performance é considerada de **{status_cto}**. 
-                Isso prova que o seu público é extremamente qualificado: uma vez que abrem o e-mail, a propensão ao clique é altíssima.
+                **Eficiência de Conteúdo (CTO):** Sua taxa interna está em **{cto_medio:.1f}%**. Isso é performance de **{status_cto}** (Mercado Ed. Corp: {META_CTO}%). 
+                O público está altamente engajado com o conteúdo após a abertura.
                 
-                **Insight de Clique:** O melhor clique atingiu **{recordista_cl[COL_CLIQUE]:.1f}%** (Base: {recordista_cl[COL_ENVIADO]:,.0f}). 
-                {"Ofertas segmentadas estão performando melhor no clique." if recordista_cl[COL_ENVIADO] < media_volume else "A oferta atual tem alto poder de tração em grandes volumes."}
+                **Insight de Clique:** O melhor clique atingiu **{recordista_cl[COL_CLIQUE]:.1f}%** em uma base de **{recordista_cl[COL_ENVIADO]:,.0f}**. 
+                {"O foco em segmentação está trazendo resultados superiores no clique." if recordista_cl[COL_ENVIADO] < media_volume else "A oferta tem tração massiva em bases de grande escala."}
                 """)
             else:
                 st.write("Selecione um produto para análise detalhada.")
@@ -122,16 +133,14 @@ if df is not None:
             st.subheader("🏆 Recordistas do Filtro")
             
             st.success(f"""
-            🔥 **Melhor Taxa de Abertura: {recordista_ab[COL_ABERTURA]:.1f}%**  
-            **Data:** {recordista_ab[COL_DATA].strftime('%d/%m/%Y')}  
-            **Base:** {recordista_ab[COL_ENVIADO]:,.0f} pessoas  
+            🔥 **Melhor Abertura: {recordista_ab[COL_ABERTURA]:.1f}%**  
+            **Data:** {recordista_ab[COL_DATA].strftime('%d/%m/%Y')} | **Base:** {recordista_ab[COL_ENVIADO]:,.0f}  
             **Assunto:** *{recordista_ab[COL_ASSUNTO]}*
             """)
 
             st.info(f"""
-            🚀 **Melhor Taxa de Clique: {recordista_cl[COL_CLIQUE]:.1f}%**  
-            **Data:** {recordista_cl[COL_DATA].strftime('%d/%m/%Y')}  
-            **Base:** {recordista_cl[COL_ENVIADO]:,.0f} pessoas  
+            🚀 **Melhor Clique: {recordista_cl[COL_CLIQUE]:.1f}%**  
+            **Data:** {recordista_cl[COL_DATA].strftime('%d/%m/%Y')} | **Base:** {recordista_cl[COL_ENVIADO]:,.0f}  
             **Assunto:** *{recordista_cl[COL_ASSUNTO]}*
             """)
                 
@@ -141,13 +150,10 @@ if df is not None:
             c_m1, c_m2, c_m3 = st.columns(3)
             with c_m1:
                 st.write(f"{'✅' if media_ab >= META_ABERTURA else '⚠️'} **Abr:** {media_ab:.1f}%")
-                st.caption(f"Meta: {META_ABERTURA}%")
             with c_m2:
                 st.write(f"{'✅' if media_cl >= META_CTR else '⚠️'} **Cli:** {media_cl:.1f}%")
-                st.caption(f"Meta: {META_CTR}%")
             with c_m3:
                 st.write(f"{'✅' if cto_medio >= META_CTO else '⚠️'} **CTO:** {cto_medio:.1f}%")
-                st.caption(f"Meta: {META_CTO}%")
 
         with st.expander("📋 Ver Dados Completos"):
             st.dataframe(df_filtrado[[COL_DATA, COL_BU, COL_PRODUTO, COL_ASSUNTO, COL_ENVIADO, COL_ABERTURA, COL_CLIQUE]].sort_values(by=COL_DATA, ascending=False))
