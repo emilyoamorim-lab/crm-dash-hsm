@@ -93,30 +93,55 @@ if 'df' in locals() and not df.empty:
         m5.metric("Eficiência (CTO)", f"{cto:.1f}%")
         m6.metric("Conv. Final", f"{(t_opts/t_base*100 if t_base > 0 else 0):.2f}%")
 
-        # --- 2. ANÁLISE DO ESPECIALISTA ---
+        # --- 2. ANÁLISE DO ESPECIALISTA E RECORDISTAS ---
         st.markdown("---")
-        col_an1, col_an2 = st.columns([1.8, 1.2])
+        col_an1, col_an2 = st.columns([1.6, 1.4])
 
+        # Localização dos recordistas
         recordista_or = df_filtrado.loc[df_filtrado[COL_AB].idxmax()]
+        recordista_ctr = df_filtrado.loc[df_filtrado[COL_CL].idxmax()]
         recordista_opt = df_filtrado.loc[df_filtrado["Oportunidades"].idxmax()] if t_opts > 0 else recordista_or
 
         with col_an1:
             st.subheader("🕵️ Análise do Especialista")
             st.info(f"""
-            **Insight sobre Assuntos (OR):** O assunto campeão de curiosidade foi **"{recordista_or['Assunto']}"** (OR: {recordista_or[COL_AB]:.1f}%). 
-            Em Educação Corporativa, gatilhos de "conversa" e "decisões" estão performando acima da média de mercado.
+            **Insight sobre Assuntos (OR):** O assunto campeão de curiosidade foi **"{recordista_or['Assunto']}"** ({recordista_or[COL_AB]:.1f}%). 
 
             **Insight sobre CTAs (Conversão):** O CTA **"{recordista_opt['CTA']}"** provou ser o mais eficiente, 
-            gerando {recordista_opt['Oportunidades']:.0f} oportunidades. Note que o formato de **WhatsApp** tem gerado uma conversão de fundo de funil muito superior a landing pages frias para este perfil de base.
+            gerando {recordista_opt['Oportunidades']:.0f} oportunidades para o produto **{recordista_opt['Produto']}**. 
 
-            **Diagnóstico Geral:** Sua eficiência (CTO) de **{cto:.1f}%** é de elite. O desafio agora é aumentar a taxa de abertura (OR), 
-            pois uma vez que o lead abre seu e-mail, a chance dele clicar e converter é altíssima.
+            **Diagnóstico Geral:** Sua eficiência (CTO) de **{cto:.1f}%** é de elite. O desafio atual é aumentar o volume de abertura mantendo a qualidade da base.
             """)
 
         with col_an2:
             st.subheader("🏆 Recordistas do Filtro")
-            st.success(f"🔥 **Melhor Assunto (OR):** {recordista_or[COL_AB]:.1f}% \n\n {recordista_or['Assunto']}")
-            st.warning(f"💰 **Melhor CTA:** {recordista_opt['Oportunidades']:.0f} Opts \n\n {recordista_opt['CTA']}")
+            
+            # Card Melhor Abertura
+            st.success(f"""
+            🔥 **Melhor Abertura (OR): {recordista_or[COL_AB]:.1f}%**  
+            **Data:** {recordista_or['Hora de Início do Envio'].strftime('%d/%m/%Y')}  
+            **Produto:** {recordista_or['Produto']}  
+            **Base de Envio:** {recordista_or[col_env_perf]:,.0f} pessoas  
+            **Assunto:** *{recordista_or['Assunto']}*
+            """)
+
+            # Card Melhor Clique
+            st.info(f"""
+            🚀 **Melhor Clique (CTR): {recordista_ctr[COL_CL]:.1f}%**  
+            **Data:** {recordista_ctr['Hora de Início do Envio'].strftime('%d/%m/%Y')}  
+            **Produto:** {recordista_ctr['Produto']}  
+            **Base de Envio:** {recordista_ctr[col_env_perf]:,.0f} pessoas  
+            **Assunto:** *{recordista_ctr['Assunto']}*
+            """)
+
+            # Card Mais Oportunidades
+            st.warning(f"""
+            💰 **Mais Oportunidades: {recordista_opt['Oportunidades']:.0f} Opts**  
+            **Data:** {recordista_opt['Hora de Início do Envio'].strftime('%d/%m/%Y')}  
+            **Produto:** {recordista_opt['Produto']}  
+            **Base de Envio:** {recordista_opt[col_env_perf]:,.0f} pessoas  
+            **CTA:** *{recordista_opt['CTA']}*
+            """)
 
         # --- 3. CONVERSÃO ---
         st.markdown("---")
@@ -125,7 +150,7 @@ if 'df' in locals() and not df.empty:
             st.subheader("🎯 Oportunidades por CTA")
             df_cta = df_filtrado[df_filtrado["Oportunidades"] > 0].groupby("CTA")["Oportunidades"].sum().reset_index().sort_values("Oportunidades")
             if not df_cta.empty: st.plotly_chart(px.bar(df_cta, x="Oportunidades", y="CTA", orientation='h', color_discrete_sequence=['#00CC96']), use_container_width=True)
-            else: st.info("Sem oportunidades registradas no período.")
+            else: st.info("Sem oportunidades no filtro.")
         with c2:
             st.subheader("📱 Conversão por Formato")
             df_f = df_filtrado[df_filtrado["Oportunidades"] > 0].groupby("Formato")["Oportunidades"].sum().reset_index()
@@ -136,7 +161,7 @@ if 'df' in locals() and not df.empty:
         fig_or = px.line(df_filtrado, x="Hora de Início do Envio", y=COL_AB, color="Produto", markers=True,
                          labels={"Hora de Início do Envio": "Data", COL_AB: "Taxa de Abertura (OR)"},
                          title="📈 Tendência: Taxa de Abertura (OR)")
-        fig_or.update_traces(hovertemplate="<b>Produto:</b> %{fullData.name}<br><b>Data:</b> %{x}<br><b>Base:</b> %{customdata[1]:,.0f}<br><b>Abertura:</b> %{y:.1f}%<extra></extra>",
+        fig_or.update_traces(hovertemplate="<b>Produto:</b> %{fullData.name}<br><b>Data:</b> %{x}<br><b>Base de Envio:</b> %{customdata[1]:,.0f}<br><b>Abertura:</b> %{y:.1f}%<extra></extra>",
                              customdata=df_filtrado[["Assunto", col_env_perf]])
         st.plotly_chart(fig_or, use_container_width=True)
 
@@ -144,7 +169,7 @@ if 'df' in locals() and not df.empty:
         fig_ctr = px.line(df_filtrado, x="Hora de Início do Envio", y=COL_CL, color="Produto", markers=True,
                           labels={"Hora de Início do Envio": "Data", COL_CL: "Taxa de Clique"},
                           title="📈 Tendência: Taxa de Clique (CTR)")
-        fig_ctr.update_traces(hovertemplate="<b>Produto:</b> %{fullData.name}<br><b>Data:</b> %{x}<br><b>Base:</b> %{customdata[1]:,.0f}<br><b>Clique:</b> %{y:.1f}%<extra></extra>",
+        fig_ctr.update_traces(hovertemplate="<b>Produto:</b> %{fullData.name}<br><b>Data:</b> %{x}<br><b>Base de Envio:</b> %{customdata[1]:,.0f}<br><b>Clique:</b> %{y:.1f}%<extra></extra>",
                               customdata=df_filtrado[["Assunto", col_env_perf]])
         st.plotly_chart(fig_ctr, use_container_width=True)
 
