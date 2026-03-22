@@ -14,13 +14,11 @@ st.title("🚀 Dashboard CRM V2: Conversão e CTAs")
 
 # --- FUNÇÕES DE LIMPEZA ---
 def padronizar_texto(txt):
-    """Remove espaços, corrige erros comuns e padroniza para busca"""
     t = str(txt).strip().lower()
-    t = t.replace("porgram", "program") # Correção automática para o erro detectado
+    t = t.replace("porgram", "program") 
     return t
 
 def limpar_numeros(valor):
-    """Garante que o número seja um inteiro puro"""
     try:
         if pd.isna(valor): return 0
         num = float(str(valor).replace('.', '').replace(',', '').strip())
@@ -34,37 +32,32 @@ if os.path.exists(NOME_ARQUIVO_PADRAO):
         df_perf = excel.parse(0) 
         df_conv = excel.parse(1) 
 
-        # Padronizar nomes de colunas (Remove espaços)
         df_perf.columns = [str(col).strip() for col in df_perf.columns]
         df_conv.columns = [str(col).strip() for col in df_conv.columns]
 
-        # Mapeamento da coluna de Envios (Pode ser 'Emails Env' ou 'Emails Enviados')
         def achar_col_envio(df):
             for c in df.columns:
                 if "emails env" in c.lower(): return c
-            return None
+            return "Emails Enviados"
 
         col_env_perf = achar_col_envio(df_perf)
         col_env_conv = achar_col_envio(df_conv)
 
-        # Preparação das Chaves de Cruzamento
         df_perf["_key_prod"] = df_perf["Produto"].apply(padronizar_texto)
         df_perf["_key_env"] = df_perf[col_env_perf].apply(limpar_numeros)
-        
         df_conv["_key_prod"] = df_conv["Produto"].apply(padronizar_texto)
         df_conv["_key_env"] = df_conv[col_env_conv].apply(limpar_numeros)
 
-        # Cruzamento
         df = pd.merge(df_perf, df_conv[["_key_prod", "_key_env", "CTA", "Formato", "Oportunidades"]], 
                       on=["_key_prod", "_key_env"], how="left")
         
-        # Tratamento Final
         df["Oportunidades"] = pd.to_numeric(df["Oportunidades"], errors='coerce').fillna(0)
         df["Hora de Início do Envio"] = pd.to_datetime(df["Hora de Início do Envio"], errors='coerce')
         df = df.dropna(subset=["Hora de Início do Envio"])
         
-        # Ajuste de Taxas
-        for col in ["Taxa de Abertura", "Taxa de Click Through Total"]:
+        # Padronização de Taxas
+        COL_AB, COL_CL = "Taxa de Abertura", "Taxa de Click Through Total"
+        for col in [COL_AB, COL_CL]:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col].astype(str).str.replace('%','').str.replace(',','.'), errors='coerce').fillna(0)
                 df[col] = df[col].apply(lambda x: x*100 if x <= 1.0 and x > 0 else x)
@@ -76,46 +69,66 @@ if os.path.exists(NOME_ARQUIVO_PADRAO):
 if 'df' in locals() and not df.empty:
     # --- FILTROS ---
     st.sidebar.header("🎯 Filtros")
+    date_range = st.sidebar.date_input("Período:", value=(df["Hora de Início do Envio"].min(), df["Hora de Início do Envio"].max()))
     bus_sel = st.sidebar.multiselect("BU:", options=sorted(df["BU"].unique()), default=df["BU"].unique())
     df_temp = df[df["BU"].isin(bus_sel)]
     prods_sel = st.sidebar.multiselect("Produto:", options=sorted(df_temp["Produto"].unique()), default=df_temp["Produto"].unique())
     
-    df_filtrado = df[(df["BU"].isin(bus_sel)) & (df["Produto"].isin(prods_sel))].copy()
+    df_filtrado = df[(df["BU"].isin(bus_sel)) & (df["Produto"].isin(prods_sel)) & 
+                     (df["Hora de Início do Envio"].dt.date >= date_range[0]) & 
+                     (df["Hora de Início do Envio"].dt.date <= date_range[1])].copy()
 
     if not df_filtrado.empty:
-        # KPIs
+        # --- 1. KPIs ---
         m1, m2, m3, m4, m5 = st.columns(5)
         t_base = df_filtrado[col_env_perf].sum()
         t_opts = df_filtrado["Oportunidades"].sum()
-        media_ab = df_filtrado["Taxa de Abertura"].mean()
-        media_cl = df_filtrado["Taxa de Click Through Total"].mean()
+        media_ab = df_filtrado[COL_AB].mean()
+        media_cl = df_filtrado[COL_CL].mean()
         
         m1.metric("Base de Envio", f"{t_base:,.0f}".replace(",", "."))
         m2.metric("Oportunidades", f"{t_opts:,.0f}")
-        m3.metric("Abertura (OR)", f"{media_ab:.1f}%")
-        m4.metric("Clique (CTR)", f"{media_cl:.1f}%")
+        m3.metric("Abertura (OR)", f"{media_ab:.1f}%", delta=f"{media_ab-META_ABERTURA:.1f}%")
+        m4.metric("Clique (CTR)", f"{media_cl:.1f}%", delta=f"{media_cl-META_CTR:.1f}%")
         m5.metric("Eficiência (CTO)", f"{(media_cl/media_ab*100 if media_ab>0 else 0):.1f}%")
 
-        # Gráficos de Conversão
+        # --- 2. CONVERSÃO ---
         st.markdown("---")
         c1, c2 = st.columns(2)
         with c1:
             st.subheader("🎯 Oportunidades por CTA")
             df_cta = df_filtrado[df_filtrado["Oportunidades"] > 0].groupby("CTA")["Oportunidades"].sum().reset_index().sort_values("Oportunidades")
             if not df_cta.empty: st.plotly_chart(px.bar(df_cta, x="Oportunidades", y="CTA", orientation='h', color_discrete_sequence=['#00CC96']), use_container_width=True)
-            else: st.info("Sem oportunidades para este filtro.")
+            else: st.info("Sem oportunidades registradas.")
         with c2:
             st.subheader("📱 Conversão por Formato")
             df_f = df_filtrado[df_filtrado["Oportunidades"] > 0].groupby("Formato")["Oportunidades"].sum().reset_index()
             if not df_f.empty: st.plotly_chart(px.pie(df_f, values="Oportunidades", names="Formato", hole=0.4), use_container_width=True)
 
-        # Tendência
+        # --- 3. GRÁFICOS DE TENDÊNCIA PADRONIZADOS ---
         st.markdown("---")
-        st.subheader("📈 Tendência: Taxa de Abertura (OR)")
-        st.plotly_chart(px.line(df_filtrado, x="Hora de Início do Envio", y="Taxa de Abertura", color="Produto", markers=True), use_container_width=True)
+        
+        # Gráfico Abertura (OR)
+        fig_or = px.line(df_filtrado, x="Hora de Início do Envio", y=COL_AB, color="Produto", markers=True,
+                         labels={"Hora de Início do Envio": "Data", COL_AB: "Taxa de Abertura (OR)"},
+                         title="📈 Tendência: Taxa de Abertura (OR)")
+        fig_or.update_traces(
+            hovertemplate="<b>Produto:</b> %{fullData.name}<br><b>Data:</b> %{x}<br><b>Base de Envio:</b> %{customdata[1]:,.0f}<br><b>Abertura:</b> %{y:.1f}%<extra></extra>",
+            customdata=df_filtrado[["Assunto", col_env_perf]]
+        )
+        st.plotly_chart(fig_or, use_container_width=True)
 
-        with st.expander("📋 Ver Tabela de Auditoria (Cruzamento)"):
-            st.write("Verifique se as colunas CTA e Oportunidades estão preenchidas:")
-            st.dataframe(df_filtrado[["Hora de Início do Envio", "Produto", col_env_perf, "CTA", "Oportunidades"]])
+        st.markdown("---")
+        
+        # Gráfico Clique (CTR)
+        fig_ctr = px.line(df_filtrado, x="Hora de Início do Envio", y=COL_CL, color="Produto", markers=True,
+                          labels={"Hora de Início do Envio": "Data", COL_CL: "Taxa de Clique"},
+                          title="📈 Tendência: Taxa de Clique (CTR)")
+        fig_ctr.update_traces(
+            hovertemplate="<b>Produto:</b> %{fullData.name}<br><b>Data:</b> %{x}<br><b>Base de Envio:</b> %{customdata[1]:,.0f}<br><b>Clique:</b> %{y:.1f}%<extra></extra>",
+            customdata=df_filtrado[["Assunto", col_env_perf]]
+        )
+        st.plotly_chart(fig_ctr, use_container_width=True)
+
     else:
         st.warning("Selecione os filtros.")
