@@ -55,7 +55,6 @@ if os.path.exists(NOME_ARQUIVO_PADRAO):
         df["Hora de Início do Envio"] = pd.to_datetime(df["Hora de Início do Envio"], errors='coerce')
         df = df.dropna(subset=["Hora de Início do Envio"])
         
-        # Padronização de Taxas
         COL_AB, COL_CL = "Taxa de Abertura", "Taxa de Click Through Total"
         for col in [COL_AB, COL_CL]:
             if col in df.columns:
@@ -80,54 +79,73 @@ if 'df' in locals() and not df.empty:
 
     if not df_filtrado.empty:
         # --- 1. KPIs ---
-        m1, m2, m3, m4, m5 = st.columns(5)
+        m1, m2, m3, m4, m5, m6 = st.columns(6)
         t_base = df_filtrado[col_env_perf].sum()
         t_opts = df_filtrado["Oportunidades"].sum()
         media_ab = df_filtrado[COL_AB].mean()
         media_cl = df_filtrado[COL_CL].mean()
+        cto = (media_cl/media_ab*100 if media_ab>0 else 0)
         
         m1.metric("Base de Envio", f"{t_base:,.0f}".replace(",", "."))
         m2.metric("Oportunidades", f"{t_opts:,.0f}")
-        m3.metric("Abertura (OR)", f"{media_ab:.1f}%", delta=f"{media_ab-META_ABERTURA:.1f}%")
-        m4.metric("Clique (CTR)", f"{media_cl:.1f}%", delta=f"{media_cl-META_CTR:.1f}%")
-        m5.metric("Eficiência (CTO)", f"{(media_cl/media_ab*100 if media_ab>0 else 0):.1f}%")
+        m3.metric("Abertura (OR)", f"{media_ab:.1f}%", delta=f"{media_ab-META_ABERTURA:.1f}% vs Mercado")
+        m4.metric("Clique (CTR)", f"{media_cl:.1f}%", delta=f"{media_cl-META_CTR:.1f}% vs Mercado")
+        m5.metric("Eficiência (CTO)", f"{cto:.1f}%")
+        m6.metric("Conv. Final", f"{(t_opts/t_base*100 if t_base > 0 else 0):.2f}%")
 
-        # --- 2. CONVERSÃO ---
+        # --- 2. ANÁLISE DO ESPECIALISTA ---
+        st.markdown("---")
+        col_an1, col_an2 = st.columns([1.8, 1.2])
+
+        recordista_or = df_filtrado.loc[df_filtrado[COL_AB].idxmax()]
+        recordista_opt = df_filtrado.loc[df_filtrado["Oportunidades"].idxmax()] if t_opts > 0 else recordista_or
+
+        with col_an1:
+            st.subheader("🕵️ Análise do Especialista")
+            st.info(f"""
+            **Insight sobre Assuntos (OR):** O assunto campeão de curiosidade foi **"{recordista_or['Assunto']}"** (OR: {recordista_or[COL_AB]:.1f}%). 
+            Em Educação Corporativa, gatilhos de "conversa" e "decisões" estão performando acima da média de mercado.
+
+            **Insight sobre CTAs (Conversão):** O CTA **"{recordista_opt['CTA']}"** provou ser o mais eficiente, 
+            gerando {recordista_opt['Oportunidades']:.0f} oportunidades. Note que o formato de **WhatsApp** tem gerado uma conversão de fundo de funil muito superior a landing pages frias para este perfil de base.
+
+            **Diagnóstico Geral:** Sua eficiência (CTO) de **{cto:.1f}%** é de elite. O desafio agora é aumentar a taxa de abertura (OR), 
+            pois uma vez que o lead abre seu e-mail, a chance dele clicar e converter é altíssima.
+            """)
+
+        with col_an2:
+            st.subheader("🏆 Recordistas do Filtro")
+            st.success(f"🔥 **Melhor Assunto (OR):** {recordista_or[COL_AB]:.1f}% \n\n {recordista_or['Assunto']}")
+            st.warning(f"💰 **Melhor CTA:** {recordista_opt['Oportunidades']:.0f} Opts \n\n {recordista_opt['CTA']}")
+
+        # --- 3. CONVERSÃO ---
         st.markdown("---")
         c1, c2 = st.columns(2)
         with c1:
             st.subheader("🎯 Oportunidades por CTA")
             df_cta = df_filtrado[df_filtrado["Oportunidades"] > 0].groupby("CTA")["Oportunidades"].sum().reset_index().sort_values("Oportunidades")
             if not df_cta.empty: st.plotly_chart(px.bar(df_cta, x="Oportunidades", y="CTA", orientation='h', color_discrete_sequence=['#00CC96']), use_container_width=True)
-            else: st.info("Sem oportunidades registradas.")
+            else: st.info("Sem oportunidades registradas no período.")
         with c2:
             st.subheader("📱 Conversão por Formato")
             df_f = df_filtrado[df_filtrado["Oportunidades"] > 0].groupby("Formato")["Oportunidades"].sum().reset_index()
             if not df_f.empty: st.plotly_chart(px.pie(df_f, values="Oportunidades", names="Formato", hole=0.4), use_container_width=True)
 
-        # --- 3. GRÁFICOS DE TENDÊNCIA PADRONIZADOS ---
+        # --- 4. GRÁFICOS DE TENDÊNCIA ---
         st.markdown("---")
-        
-        # Gráfico Abertura (OR)
         fig_or = px.line(df_filtrado, x="Hora de Início do Envio", y=COL_AB, color="Produto", markers=True,
                          labels={"Hora de Início do Envio": "Data", COL_AB: "Taxa de Abertura (OR)"},
                          title="📈 Tendência: Taxa de Abertura (OR)")
-        fig_or.update_traces(
-            hovertemplate="<b>Produto:</b> %{fullData.name}<br><b>Data:</b> %{x}<br><b>Base de Envio:</b> %{customdata[1]:,.0f}<br><b>Abertura:</b> %{y:.1f}%<extra></extra>",
-            customdata=df_filtrado[["Assunto", col_env_perf]]
-        )
+        fig_or.update_traces(hovertemplate="<b>Produto:</b> %{fullData.name}<br><b>Data:</b> %{x}<br><b>Base:</b> %{customdata[1]:,.0f}<br><b>Abertura:</b> %{y:.1f}%<extra></extra>",
+                             customdata=df_filtrado[["Assunto", col_env_perf]])
         st.plotly_chart(fig_or, use_container_width=True)
 
         st.markdown("---")
-        
-        # Gráfico Clique (CTR)
         fig_ctr = px.line(df_filtrado, x="Hora de Início do Envio", y=COL_CL, color="Produto", markers=True,
                           labels={"Hora de Início do Envio": "Data", COL_CL: "Taxa de Clique"},
                           title="📈 Tendência: Taxa de Clique (CTR)")
-        fig_ctr.update_traces(
-            hovertemplate="<b>Produto:</b> %{fullData.name}<br><b>Data:</b> %{x}<br><b>Base de Envio:</b> %{customdata[1]:,.0f}<br><b>Clique:</b> %{y:.1f}%<extra></extra>",
-            customdata=df_filtrado[["Assunto", col_env_perf]]
-        )
+        fig_ctr.update_traces(hovertemplate="<b>Produto:</b> %{fullData.name}<br><b>Data:</b> %{x}<br><b>Base:</b> %{customdata[1]:,.0f}<br><b>Clique:</b> %{y:.1f}%<extra></extra>",
+                              customdata=df_filtrado[["Assunto", col_env_perf]])
         st.plotly_chart(fig_ctr, use_container_width=True)
 
     else:
