@@ -8,7 +8,7 @@ from datetime import datetime
 st.set_page_config(page_title="CRM V2 - Conversão & CTAs", layout="wide")
 
 # --- CONFIGURAÇÕES FIXAS ---
-NOME_ARQUIVO_PADRAO = "Dados CRM 2026 - V2.xlsx"
+NOME_ARQUIVO_PADRAO = "Dados CRM 2026 - V3.xlsx"
 
 # Benchmarks Mercado Educação Corporativa
 META_ABERTURA = 22.0
