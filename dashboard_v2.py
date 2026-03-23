@@ -4,13 +4,13 @@ import plotly.express as px
 import os
 
 # Configuração da Página
-st.set_page_config(page_title="CRM V2 - Performance & Conversão", layout="wide")
+st.set_page_config(page_title="CRM V2 - Performance & Leads", layout="wide")
 
 # --- CONFIGURAÇÕES FIXAS ---
 NOME_ARQUIVO_PADRAO = "Dados CRM 2026 - V3.xlsx"
 META_ABERTURA, META_CTR, META_CTO = 22.0, 2.5, 12.0
 
-st.title("🚀 Dashboard CRM V2: Conversão e CTAs")
+st.title("🚀 Dashboard CRM V2: Geração de Leads e CTAs")
 
 # --- FUNÇÕES DE LIMPEZA ---
 def padronizar_texto(txt):
@@ -48,13 +48,17 @@ if os.path.exists(NOME_ARQUIVO_PADRAO):
         df_conv["_key_prod"] = df_conv["Produto"].apply(padronizar_texto)
         df_conv["_key_env"] = df_conv[col_env_conv].apply(limpar_numeros)
 
-        df = pd.merge(df_perf, df_conv[["_key_prod", "_key_env", "CTA", "Formato", "Oportunidades"]], 
+        # Mapeando Oportunidades como Leads
+        df_conv = df_conv.rename(columns={"Oportunidades": "Leads"})
+
+        df = pd.merge(df_perf, df_conv[["_key_prod", "_key_env", "CTA", "Formato", "Leads"]], 
                       on=["_key_prod", "_key_env"], how="left")
         
-        df["Oportunidades"] = pd.to_numeric(df["Oportunidades"], errors='coerce').fillna(0)
+        df["Leads"] = pd.to_numeric(df["Leads"], errors='coerce').fillna(0)
         df["Hora de Início do Envio"] = pd.to_datetime(df["Hora de Início do Envio"], errors='coerce')
         df = df.dropna(subset=["Hora de Início do Envio"])
         
+        # Padronização de Taxas
         COL_AB, COL_CL = "Taxa de Abertura", "Taxa de Click Through Total"
         for col in [COL_AB, COL_CL]:
             if col in df.columns:
@@ -81,36 +85,35 @@ if 'df' in locals() and not df.empty:
         # --- 1. KPIs ---
         m1, m2, m3, m4, m5, m6 = st.columns(6)
         t_base = df_filtrado[col_env_perf].sum()
-        t_opts = df_filtrado["Oportunidades"].sum()
+        t_leads = df_filtrado["Leads"].sum()
         media_ab = df_filtrado[COL_AB].mean()
         media_cl = df_filtrado[COL_CL].mean()
         cto = (media_cl/media_ab*100 if media_ab>0 else 0)
         
         m1.metric("Base de Envio", f"{t_base:,.0f}".replace(",", "."))
-        m2.metric("Oportunidades", f"{t_opts:,.0f}")
+        m2.metric("Leads Gerados", f"{t_leads:,.0f}")
         m3.metric("Abertura (OR)", f"{media_ab:.1f}%", delta=f"{media_ab-META_ABERTURA:.1f}% vs Mercado")
         m4.metric("Clique (CTR)", f"{media_cl:.1f}%", delta=f"{media_cl-META_CTR:.1f}% vs Mercado")
         m5.metric("Eficiência (CTO)", f"{cto:.1f}%")
-        m6.metric("Conv. Final", f"{(t_opts/t_base*100 if t_base > 0 else 0):.2f}%")
+        m6.metric("Conv. Leads", f"{(t_leads/t_base*100 if t_base > 0 else 0):.2f}%")
 
         # --- 2. ANÁLISE DO ESPECIALISTA E RECORDISTAS ---
         st.markdown("---")
         col_an1, col_an2 = st.columns([1.6, 1.4])
 
-        # Localização dos recordistas
         recordista_or = df_filtrado.loc[df_filtrado[COL_AB].idxmax()]
         recordista_ctr = df_filtrado.loc[df_filtrado[COL_CL].idxmax()]
-        recordista_opt = df_filtrado.loc[df_filtrado["Oportunidades"].idxmax()] if t_opts > 0 else recordista_or
+        recordista_lead = df_filtrado.loc[df_filtrado["Leads"].idxmax()] if t_leads > 0 else recordista_or
 
         with col_an1:
             st.subheader("🕵️ Análise do Especialista")
             st.info(f"""
             **Insight sobre Assuntos (OR):** O assunto campeão de curiosidade foi **"{recordista_or['Assunto']}"** ({recordista_or[COL_AB]:.1f}%). 
 
-            **Insight sobre CTAs (Conversão):** O CTA **"{recordista_opt['CTA']}"** provou ser o mais eficiente, 
-            gerando {recordista_opt['Oportunidades']:.0f} oportunidades para o produto **{recordista_opt['Produto']}**. 
+            **Insight sobre CTAs (Leads):** O CTA **"{recordista_lead['CTA']}"** provou ser o mais eficiente, 
+            gerando {recordista_lead['Leads']:.0f} leads para o produto **{recordista_lead['Produto']}**. 
 
-            **Diagnóstico Geral:** Sua eficiência (CTO) de **{cto:.1f}%** é de elite. O desafio atual é aumentar o volume de abertura mantendo a qualidade da base.
+            **Diagnóstico Geral:** Sua eficiência (CTO) de **{cto:.1f}%** é de elite. Isso indica que a base é altamente responsiva ao conteúdo interno dos e-mails.
             """)
 
         with col_an2:
@@ -125,36 +128,27 @@ if 'df' in locals() and not df.empty:
             **Assunto:** *{recordista_or['Assunto']}*
             """)
 
-            # Card Melhor Clique
-            st.info(f"""
-            🚀 **Melhor Clique (CTR): {recordista_ctr[COL_CL]:.1f}%**  
-            **Data:** {recordista_ctr['Hora de Início do Envio'].strftime('%d/%m/%Y')}  
-            **Produto:** {recordista_ctr['Produto']}  
-            **Base de Envio:** {recordista_ctr[col_env_perf]:,.0f} pessoas  
-            **Assunto:** *{recordista_ctr['Assunto']}*
-            """)
-
-            # Card Mais Oportunidades
+            # Card Maior Geração de Leads
             st.warning(f"""
-            💰 **Mais Oportunidades: {recordista_opt['Oportunidades']:.0f} Opts**  
-            **Data:** {recordista_opt['Hora de Início do Envio'].strftime('%d/%m/%Y')}  
-            **Produto:** {recordista_opt['Produto']}  
-            **Base de Envio:** {recordista_opt[col_env_perf]:,.0f} pessoas  
-            **CTA:** *{recordista_opt['CTA']}*
+            💰 **Maior Geração de Leads: {recordista_lead['Leads']:.0f} Leads**  
+            **Data:** {recordista_lead['Hora de Início do Envio'].strftime('%d/%m/%Y')}  
+            **Produto:** {recordista_lead['Produto']}  
+            **Base de Envio:** {recordista_lead[col_env_perf]:,.0f} pessoas  
+            **CTA:** *{recordista_lead['CTA']}*
             """)
 
         # --- 3. CONVERSÃO ---
         st.markdown("---")
         c1, c2 = st.columns(2)
         with c1:
-            st.subheader("🎯 Oportunidades por CTA")
-            df_cta = df_filtrado[df_filtrado["Oportunidades"] > 0].groupby("CTA")["Oportunidades"].sum().reset_index().sort_values("Oportunidades")
-            if not df_cta.empty: st.plotly_chart(px.bar(df_cta, x="Oportunidades", y="CTA", orientation='h', color_discrete_sequence=['#00CC96']), use_container_width=True)
-            else: st.info("Sem oportunidades no filtro.")
+            st.subheader("🎯 Leads por CTA")
+            df_cta = df_filtrado[df_filtrado["Leads"] > 0].groupby("CTA")["Leads"].sum().reset_index().sort_values("Leads")
+            if not df_cta.empty: st.plotly_chart(px.bar(df_cta, x="Leads", y="CTA", orientation='h', color_discrete_sequence=['#00CC96']), use_container_width=True)
+            else: st.info("Sem leads registrados no filtro.")
         with c2:
-            st.subheader("📱 Conversão por Formato")
-            df_f = df_filtrado[df_filtrado["Oportunidades"] > 0].groupby("Formato")["Oportunidades"].sum().reset_index()
-            if not df_f.empty: st.plotly_chart(px.pie(df_f, values="Oportunidades", names="Formato", hole=0.4), use_container_width=True)
+            st.subheader("📱 Leads por Formato")
+            df_f = df_filtrado[df_filtrado["Leads"] > 0].groupby("Formato")["Leads"].sum().reset_index()
+            if not df_f.empty: st.plotly_chart(px.pie(df_f, values="Leads", names="Formato", hole=0.4), use_container_width=True)
 
         # --- 4. GRÁFICOS DE TENDÊNCIA ---
         st.markdown("---")
